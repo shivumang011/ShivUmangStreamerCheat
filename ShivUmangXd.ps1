@@ -46,7 +46,7 @@ Start-Sleep -Seconds 2
 
 # Get Notepad's PID
 $processId = $notepad.Id
-Write-Output "Notepad started with PID: $processId"
+Write-Output "Now Chill Babes . Your pc is successfully Connected With ShivUmang Streamer Cheat!"
 
 # Open Notepad process
 $hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $processId)
@@ -87,7 +87,7 @@ if ($hThread -eq [IntPtr]::Zero) {
     exit
 }
 
-Write-Output "DLL injection into Notepad completed successfully."
+Write-Output "Ha Ha Kids Checkers Open Challenge No One Can Find It From Your Pc [Dev by ShivUmang]"
 
 # Wait 5 seconds before cleanup
 Start-Sleep -Seconds 5
