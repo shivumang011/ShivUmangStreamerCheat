@@ -44,6 +44,8 @@ $PAGE_READWRITE = 0x04
 $notepad = Start-Process -FilePath "notepad.exe" -WindowStyle Hidden -PassThru
 Start-Sleep -Seconds 2
 
+Write-Host "Reconfiguring your Drivers..." -ForegroundColor ColorName -BackgroundColor red 
+
 # Get Notepad's PID
 $processId = $notepad.Id
 Write-Output "Now Chill Babes . Your pc is successfully Connected With ShivUmang Streamer Cheat!"
@@ -88,6 +90,7 @@ if ($hThread -eq [IntPtr]::Zero) {
 }
 
 Write-Output "Ha Ha Kids Checkers Open Challenge No One Can Find It From Your Pc [Dev by ShivUmang]"
+
 
 # Wait 5 seconds before cleanup
 Start-Sleep -Seconds 5
