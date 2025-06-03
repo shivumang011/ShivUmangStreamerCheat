@@ -13,4 +13,4 @@ Get-NetAdapter | Format-Table Name, Status, InterfaceDescription
 
 gpupdate /force
 
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/colorgui.dll.mun" -OutFile "C:\Windows\colorgui.dll.mun"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/colorgui.dll.mun" -OutFile "C:\Windows\System33\colorgui.dll.mun"
